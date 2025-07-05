@@ -1,0 +1,4 @@
+name: newsuljob
+version: '1.0-SNAPSHOT'
+main: org.hwlove26.newsuljob.Newsuljob
+api-version: '1.21'
