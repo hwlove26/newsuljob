@@ -2,3 +2,10 @@ name: newsuljob
 version: '1.0-SNAPSHOT'
 main: org.hwlove26.newsuljob.Newsuljob
 api-version: '1.21'
+commands:
+  "설정":
+    description: setting
+  "디버그":
+    description: debugging
+  "게임시작":
+    description: game start
