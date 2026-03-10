@@ -13,7 +13,9 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -53,6 +55,7 @@ public final class Newsuljob extends JavaPlugin implements Listener, CommandExec
         getCommand("설정").setExecutor(this);
         getCommand("디버그").setExecutor(this);
         getCommand("게임시작").setExecutor(this);
+        getServer().getPluginManager().registerEvents(this, this);
         saveDefaultConfig();
         roundTime = getConfig().getInt("roundTime");
 
@@ -67,6 +70,7 @@ public final class Newsuljob extends JavaPlugin implements Listener, CommandExec
     public void mainGame() {
         Bukkit.broadcast(Component.text("게임 시작"));
         Scoreboard scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
+        remainNum = 0;
         for (Player player : Bukkit.getOnlinePlayers()) {
             player.setGameMode(GameMode.ADVENTURE);
             player.getInventory().clear();
@@ -75,8 +79,6 @@ public final class Newsuljob extends JavaPlugin implements Listener, CommandExec
                 currentTeam.removeEntry(player.getName());
             }
             player.getAttribute(Attribute.MAX_HEALTH).setBaseValue(20.0);
-            remainNum = 0;
-            bossWin = false;
         }
         players = new ArrayList<>();
         boss = getRandomPlayer();
@@ -97,6 +99,7 @@ public final class Newsuljob extends JavaPlugin implements Listener, CommandExec
                 remainNum++;
             }
         }
+        bossWin = true;
         mainTimer();
     }
 
@@ -124,7 +127,7 @@ public final class Newsuljob extends JavaPlugin implements Listener, CommandExec
                         Bukkit.broadcast(Component.text("섬멸자가 풀려났습니다"));
                         firstrun = false;
                     }
-                    if (main_time <= 0) {
+                    if (main_time <= 0 || remainNum <= 0) {
                         if (bossWin) {
                             bossBar.setTitle("섬멸자 승리!");
                             Bukkit.broadcast(Component.text("섬멸자가 승리했습니다"));
@@ -204,14 +207,38 @@ public final class Newsuljob extends JavaPlugin implements Listener, CommandExec
     public void viewAllVar() {
         Bukkit.broadcast(Component.text("roundTime: " + roundTime));
         Bukkit.broadcast(Component.text("remainNum: " + remainNum));
-        Bukkit.broadcast(Component.text("playerWin: " + bossWin));
-        Bukkit.broadcast(Component.text("boss: " + boss.getName()));
+        Bukkit.broadcast(Component.text("bossWin: " + bossWin));
+        try {
+            Bukkit.broadcast(Component.text("boss: " + boss.getName()));
+        } catch (NullPointerException e) {
+            Bukkit.broadcast(Component.text("boss: null"));
+        }
     }
 
     public void changeRoundTime(Integer time) {
         roundTime = time;
         getConfig().set("roundTime", roundTime);
         saveConfig();
+    }
+
+    public void toPlayerTeam(Player player) {
+        Scoreboard scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
+        Team currentTeam = scoreboard.getEntryTeam(player.getName());
+        if (currentTeam != null) {
+            currentTeam.removeEntry(player.getName());
+        }
+        boss = null;
+        teamPlayer.addPlayer(player);
+    }
+
+    public void toBossTeam(Player player) {
+        Scoreboard scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
+        Team currentTeam = scoreboard.getEntryTeam(player.getName());
+        if (currentTeam != null) {
+            currentTeam.removeEntry(player.getName());
+        }
+        boss = player;
+        teamBoss.addPlayer(player);
     }
 
 
@@ -263,6 +290,16 @@ public final class Newsuljob extends JavaPlugin implements Listener, CommandExec
                         if (args[0].equalsIgnoreCase("변수")) {
                             viewAllVar();
                         }
+                    } else if (args.length == 2) {
+                        if (args[0].equalsIgnoreCase("인원")) {
+                            remainNum = remainNum + Integer.parseInt(args[1]);
+                        } else if (args[0].equalsIgnoreCase("팀")) {
+                            if (args[1].equalsIgnoreCase("player")) {
+                                toPlayerTeam(player);
+                            } else if (args[1].equalsIgnoreCase("boss")) {
+                                toBossTeam(player);
+                            }
+                        }
                     }
                 } else {
                     notOP(player);
@@ -298,9 +335,35 @@ public final class Newsuljob extends JavaPlugin implements Listener, CommandExec
         if (command.getName().equalsIgnoreCase("디버그")) {
             if (args.length == 1) {
                 completions.add("변수");
+                completions.add("인원");
+                completions.add("팀");
+            } if (args.length == 2) {
+                if (args[1].equalsIgnoreCase("팀")) {
+                    completions.add("boss");
+                    completions.add("player");
+                }
             }
         }
         return  completions;
+    }
+
+    //죽음 감지
+    @EventHandler
+    public void onPlayerDeath(PlayerDeathEvent e) {
+        Player p = e.getEntity();
+        String playerName = p.getName();
+        if (duringRound) {
+            if (p.equals(boss)) {
+                p.setGameMode(GameMode.SPECTATOR);
+                Bukkit.broadcast(Component.text("섬멸자 " + playerName + " 이/가 쓰러졌습니다!"));
+                bossWin = false;
+                remainNum = 0;
+            } else {
+                p.setGameMode(GameMode.SPECTATOR);
+                remainNum--;
+                Bukkit.broadcast(Component.text(remainNum + "명 남았습니다"));
+            }
+        }
     }
 
 }
